@@ -25,7 +25,7 @@ class CRCDigestReader {
         return bytesRead;
     }
 
-    std::size_t read(uint8_t *buffer, std::size size) {
+    std::size_t read(uint8_t *buffer, std::size_t size) {
         std::size_t bytesRead = reader.read(reinterpret_cast<char*>(buffer),size);
 
         if (bytesRead > 0) {
