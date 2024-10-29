@@ -1,6 +1,6 @@
 #include "crc.hpp"
 
-CRC::CRC(uint32_t poly, uint32_t init) noexcept : polynomial(poly), initialValue(init) {
+CRC::CRC(uint32_t poly, uint32_t init) noexcept : polynomial(poly), initialValue(init), currentCRC(init) {
     generateTable();
 }
 
@@ -32,5 +32,19 @@ uint32_t CRC::calculate(std::span<const uint8_t> data) const noexcept {
         crc = updateByte(crc,byte);
     }
 
-    return crc;
+    return crc ^ FINALXOR;
+}
+
+uint32_t CRC::finalize() const noexcept {
+    return currentCRC ^ FINALXOR;
+}
+
+void CRC::update(std::span<const uint8_t> data) noexcept {
+    for (uint8_t byte: data) {
+        currentCRC = updateByte(currentCRC,byte);
+    }
+}
+
+void CRC::reset() noexcept {
+    currentCRC = initialValue;
 }

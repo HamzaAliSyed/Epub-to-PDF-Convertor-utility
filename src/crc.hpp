@@ -14,6 +14,8 @@ class CRC {
     std::array<uint32_t, 256> crcTable{};
     uint32_t polynomial;
     uint32_t initialValue;
+    uint32_t currentCRC;
+    const uint32_t FINALXOR = 0xFFFFFFFF;
 
     void generateTable() noexcept;
 
@@ -22,4 +24,7 @@ class CRC {
     explicit CRC (uint32_t poly = DEFAULT_POLYNOMIAL, uint32_t init = DEFAULT_INITIAL) noexcept;
     [[nodiscard]] uint32_t updateByte(uint32_t crc, uint8_t data) const noexcept;
     [[nodiscard]] uint32_t calculate(std::span<const uint8_t> data) const noexcept;
+    [[nodiscard]] uint32_t finalize() const noexcept;
+    void update(std::span<const uint8_t> data) noexcept;
+    void reset() noexcept;
 };
