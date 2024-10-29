@@ -4,6 +4,7 @@
 #include <cstring>
 #include <istream>
 #include <cstdint>
+
 class LZMADecryptor {
     public:
     
