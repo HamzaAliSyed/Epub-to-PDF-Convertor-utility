@@ -29,3 +29,9 @@ class CRCDigestReader {
         return digest.finalize();
     }
 };
+
+template <typename Reader>
+
+CRCDigestReader<Reader> makeCRCDigestReader(Reader &reader, CRC& digest) {
+    return CRCDigestReader<Reader>(reader,digest);
+}
