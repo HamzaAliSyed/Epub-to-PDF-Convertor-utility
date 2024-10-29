@@ -25,6 +25,16 @@ class CRCDigestReader {
         return bytesRead;
     }
 
+    std::size_t read(uint8_t *buffer, std::size size) {
+        std::size_t bytesRead = reader.read(reinterpret_cast<char*>(buffer),size);
+
+        if (bytesRead > 0) {
+            digest.update(std::span<const uint8_t>(buffer,bytesRead));
+        }
+
+        return bytesRead;
+    }
+
     uint32_t getCRC() const {
         return digest.finalize();
     }
