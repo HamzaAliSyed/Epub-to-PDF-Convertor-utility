@@ -1,6 +1,5 @@
 #include <iostream>
-#include <fstream>
-#include <string>
+#include "zipreader.hpp"
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -8,22 +7,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::string fileName = argv[1];
-    std::string extension = fileName.substr(fileName.find_last_of(".")+1);
-    if (extension != "epub") {
-        std::cerr << "Error: File must have .epub extension" << std::endl;
-        return 1;
+    ZipReader reader(argv[1]);
+    if (reader.isZipFile()) {
+        std::cout << "This is a valid ZIP/EPUB file!" << std::endl;
+    } else {
+        std::cout << "This is NOT a valid ZIP/EPUB file!" << std::endl;
     }
 
-    std::ifstream file(fileName);
-    if (!file.is_open()) {
-        std::cerr << "Error: Could not open file " << fileName << std::endl;
-        return 1;
-    }
-
-    std::cout << "Successfully opened EPUB file: " << fileName << std::endl;
-
-    file.close();
-
+    reader.close();
     return 0;
 }
