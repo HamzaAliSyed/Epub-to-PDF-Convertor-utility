@@ -2,4 +2,4 @@
 
 ## Design Steps
 
-- Design a LZMA decryptor
+- Design a LZ77 decryptor
