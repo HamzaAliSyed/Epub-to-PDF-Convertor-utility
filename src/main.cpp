@@ -10,6 +10,9 @@ int main(int argc, char* argv[]) {
     ZipReader reader(argv[1]);
     if (reader.isZipFile()) {
         std::cout << "This is a valid ZIP/EPUB file!" << std::endl;
+        if (reader.readFileHeaders()) {
+            reader.printAllFiles();
+        }
     } else {
         std::cout << "This is NOT a valid ZIP/EPUB file!" << std::endl;
     }
