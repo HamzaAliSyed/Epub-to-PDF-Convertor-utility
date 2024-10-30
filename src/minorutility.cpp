@@ -1,6 +1,6 @@
-#include "LZMADecrypter.hpp"
+#include "minorutility.hpp"
 
-bool LZMADecryptor::ReadTag(std::istream& input, const std::vector<uint8_t>& tag) {
+bool MinorUtility::ReadTag(std::istream& input, const std::vector<uint8_t>& tag) {
     std::vector<uint8_t> buffer(tag.size(), 0);
     input.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
     if (!input) {
@@ -9,11 +9,11 @@ bool LZMADecryptor::ReadTag(std::istream& input, const std::vector<uint8_t>& tag
     return std::memcmp(buffer.data(), tag.data(), tag.size()) == 0;
 }
 
-bool LZMADecryptor::IsEndOfFile(std::istream& input) {
+bool MinorUtility::IsEndOfFile(std::istream& input) {
     return input.peek() == std::istream::traits_type::eof();
 }
 
-bool LZMADecryptor::FlushZeroPadding(std::istream& input) {
+bool MinorUtility::FlushZeroPadding(std::istream& input) {
     std::vector<uint8_t> buffer(1024);
     while (true) {
         input.read(reinterpret_cast<char*>(buffer.data()), buffer.size());

@@ -5,7 +5,7 @@
 #include <istream>
 #include <cstdint>
 
-class LZMADecryptor {
+class MinorUtility {
     public:
     
     bool ReadTag(std::istream& input, const std::vector<uint8_t>& tag);
