@@ -2,4 +2,5 @@
 
 ## Design Steps
 
-- Design a LZ77 decryptor
+- Design a ZIP Header reader then extractor
+- Design a XML Parser
