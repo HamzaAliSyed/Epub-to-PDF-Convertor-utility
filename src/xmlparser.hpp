@@ -190,7 +190,7 @@ class XMLParser {
                     text += peek();
                     advance();
                 }
-                if (!text.empty() && !std::ranges::all_of(text, ::isspace)) {
+                if (!text.empty() && !std::all_of(text.begin(), text.end(), ::isspace)) {
                     auto textNode = std::make_unique<XMLNode>("#text");
                     textNode->setContent(std::move(text));
                     node->addChild(std::move(textNode));
