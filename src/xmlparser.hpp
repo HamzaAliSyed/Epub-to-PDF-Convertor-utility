@@ -4,231 +4,407 @@
 #include <vector>
 #include <memory>
 #include <string_view>
-#include <stdexcept>
-#include <format>
-#include <span>
-#include <ranges>
-#include <concepts>
-#include <expected>
+#include <algorithm>
 
-class XMLNode;
-
-using AttributePair = std::pair<std::string, std::string>;
-using NodePointer = std::unique_ptr<XMLNode>;
-using NodeSpan = std::span<const NodePointer>;
+using AttributePair = std::pair<std::string,std::string>;
 
 class XMLNode {
     private:
+        std::string name;
+        std::string content;
+        std::vector<AttributePair> attributes;
+        std::vector<std::unique_ptr<XMLNode>> children;
+    
+    public:
+        explicit XMLNode(std::string nodeName) : name(std::move(nodeName)) {}
 
-    std::string name;
-    std::string content;
-    std::vector<AttributePair> attributes;
-    std::vector<NodePointer> childern;
-    XMLNode* parent{nullptr};
+        auto GetName() const noexcept -> const std::string& {return name;}
+        auto GetContent() const noexcept -> const std::string& {return content;}
+        auto SetContent(std::string nodeContent) noexcept -> void {content = std::move(nodeContent);}
+
+        auto AddAttribute(std::string key, std::string value) -> void {
+            attributes.emplace_back(std::move(key),std::move(value));
+        }
+
+        auto GetAttributeValue(std::string key) const -> std::string_view {
+            for (const auto& [attrKey,attrValue] : attributes) {
+                if (attrKey == key) {
+                    return attrValue;
+                }
+            }
+
+            return {};
+        }
+
+        auto AddChild(std::unique_ptr<XMLNode> child) -> void {
+            children.push_back(std::move(child));
+        }
+
+        auto GetChildren() const -> const std::vector<std::unique_ptr<XMLNode>>& {
+            return children;
+        }
+
+        auto FindChildByName(std::string_view childName) const -> const XMLNode* {
+            for (const auto& child : children) {
+                if (child -> GetName() == childName) {
+                    return child.get();
+                }
+            }
+            
+            return nullptr;
+        }
+
+        auto GetAttributes() const -> const std::vector<AttributePair>& {
+            return attributes;
+        }
+
+        auto ToString(size_t indent = 0) const -> std::string {
+            std::string result(indent, ' ');
+            result += '<' + name;
+
+            for (const auto& [key,value] : attributes) {
+                result += ' ' + key + "=\"" + value + '"';
+            }
+
+            if (children.empty() && content.empty()) {
+                result += "/>\n";
+                return result;
+            }
+
+            result += '>';
+
+            if (!children.empty()) {
+                result += '\n';
+                for (const auto& child : children) {
+                    result += child -> ToString(indent + 2);
+                }
+                result += std::string(indent,' ');
+            } else if (!content.empty()) {
+                result += content;
+            }
+
+            result += "</" + name + ">\n";
+            return result;
+        }
+};
+
+class XMLParseError {
+    public:
+        enum class ErrorType {
+            None,
+            InvalidTag,
+            UnexpectedEOF,
+            InvalidAttribute,
+            MalformedXML,
+            UnclosedTag,
+            InvalidCDATA,
+            InvalidComment
+        };
+
+    private:
+        ErrorType errorType;
+        size_t position;
+        std::string message;
 
     public:
+        XMLParseError(ErrorType type, size_t pos, std::string msg) 
+        : errorType(type), position(pos), message(std::move(msg)) {}
 
-    explicit XMLNode(std::string_view nodeName) : name(nodeName) {}
-    
-    auto addAttribute(std::string_view key, std::string_view value) -> void {
-        attributes.emplace_back(std::string{key},std::string{value});
-    }
-
-    auto addChild(NodePointer child) -> void {
-        child -> parent = this;
-        childern.push_back(std::move(child));
-    }
-
-    [[nodiscard]] auto getName() const -> std::string_view {return name;}
-    [[nodiscard]] auto getContent() const -> std::string_view {return content;}
-    [[nodiscard]] auto getAttributes() const -> std::span<const AttributePair> {
-        return std::span{attributes};
-    }
-
-    [[nodiscard]] auto findChildByName(std::string_view childName) const -> const XMLNode* {
-        auto it = std::ranges::find_if(childern, [childName](const auto &child){
-            return child->getName() == childName;
-        });
-        return it != childern.end() ?  it->get() : nullptr;
-    }
-
-    [[nodiscard]] auto getAttributeValue(std::string_view key) const -> std::optional<std::string_view> {
-        auto it = std::ranges::find_if(attributes, [key](const auto &attribute){return attribute.first == key;});
-        return it != attributes.end() ? std::optional{std::string_view{it->second}} : std::nullopt;
-    }
-
-    void setContent(std::string text) {
-        content = std::move(text);
-    }
+        auto GetType() const -> ErrorType {return errorType;}
+        auto GetPosition() const -> size_t {return position;}
+        auto GetMessage() const -> const std::string& {return message;}
 };
 
 class XMLParser {
     private:
+        std::string_view content;
+        size_t position{0};
+        std::optional<XMLParseError> lastError;
 
-    std::string_view content;
-    size_t position{0};
-
-    void skipWhiteSpace() {
-        while (position < content.length() && std::isspace(content[position])) {
-            position++;
+        auto SetError(XMLParseError::ErrorType type, const std::string& msg) -> void {
+            lastError = XMLParseError(type, position, msg);
         }
-    }
 
-    [[nodiscard]] char peek() const {
-        return position < content.length() ? content[position] : '\0';
-    }
-
-    void advance() {
-        if (position < content.length()) {
-            position++;
+        auto SkipWhitespace() -> void {
+            while (position < content.length() && std::isspace(content[position])) {
+                ++position;
+            }
         }
-    }
 
-    [[nodiscard]] bool match(char expected) {
-        if (peek() == expected) {
-            advance();
+        auto ReadNodeName() -> std::string {
+            std::string name = "";
+            while (position < content.length() && !std::isspace(content[position]) && 
+            content[position] != '>' && content[position] != '/' ) {
+                name += content[position++];
+            }
+            return IsValidTag(name) ? name : std::string{};
+        }
+
+        auto ReadUntil(char delimiter) -> std::string {
+            std::string result = "";
+            while (position < content.length() && content[position] != delimiter) {
+                result += content[position++];
+            }
+            return result;
+        }
+
+        auto IsEndOfTag() -> bool {
+            SkipWhitespace();
+            return position < content.length() && content[position] == '>';
+        }
+
+        auto ParseAttributes(XMLNode& node) -> bool {
+            while (position < content.length() 
+            && content[position] != '>' && content[position] != '/') {
+                SkipWhitespace();
+                std::string name = ReadUntil('=');
+                if (name.empty()) return false;
+
+                if (position >= content.length() || content[position] != '=') return false;
+                ++position;
+
+                if (position >= content.length() || content[position] != '"') return false;
+                ++position;
+
+                std::string value = ReadUntil('"');
+                if (position >= content.length()) return false;
+                ++position;
+
+                node.AddAttribute(std::move(name),std::move(value));
+            }
             return true;
         }
-        return false;
-    }
 
-    [[nodiscard]] std::string parseName() {
-        skipWhiteSpace();
-        std::string name;
-        
-        while (position < content.length() && 
-               (std::isalnum(peek()) || peek() == '_' || peek() == '-' || peek() == ':')) {
-            name += peek();
-            advance();
-        }
-        
-        return name;
-    }
+        auto IsValidTag(std::string_view tag) const -> bool {
+            if(tag.empty()) return false;
 
-    [[nodiscard]] std::pair<std::string, std::string> parseAttribute() {
-        skipWhiteSpace();
-        std::string name = parseName();
-        
-        skipWhiteSpace();
-        if (!match('=')) {
-            throw std::runtime_error(std::format("Expected '=' at position {}", position));
+            if(!std::isalpha(tag[0]) && tag[0] != '_') return false;
+
+            return std::all_of(tag.begin() + 1, tag.end(), [](char c) {
+                return std::isalnum(c) || c == '-' || c == '.';
+            });
         }
 
-        skipWhiteSpace();
-        if (!match('"')) {
-            throw std::runtime_error(std::format("Expected '\"' at position {}", position));
-        }
-
-        std::string value;
-        while (peek() != '"' && position < content.length()) {
-            value += peek();
-            advance();
-        }
-
-        if (!match('"')) {
-            throw std::runtime_error(std::format("Expected closing '\"' at position {}", position));
-        }
-
-        return {name, value};
-    }
-
-    [[nodiscard]] std::unique_ptr<XMLNode> parseNode() {
-        skipWhiteSpace();
-        
-        if (!match('<')) {
-            throw std::runtime_error(std::format("Expected '<' at position {}", position));
-        }
-
-        std::string nodeName = parseName();
-        if (nodeName.empty()) {
-            throw std::runtime_error(std::format("Expected node name at position {}", position));
-        }
-
-        auto node = std::make_unique<XMLNode>(nodeName);
-
-        skipWhiteSpace();
-        while (peek() != '>' && peek() != '/' && position < content.length()) {
-            auto [name, value] = parseAttribute();
-            node->addAttribute(name, value);
-            skipWhiteSpace();
-        }
-
-        if (match('/')) {
-            if (!match('>')) {
-                throw std::runtime_error(std::format("Expected '>' at position {}", position));
+        auto SkipComment() -> bool {
+            if (position +3 >= content.length() || content.substr(position,4) != "<!--") {
+                SetError(XMLParseError::ErrorType::InvalidComment, "Invalid comment start");
+                return false;
             }
+
+            position += 4;
+
+            while (position + 2 < content.length()) {
+                if (content.substr(position,3) == "-->") {
+                    position +=3;
+                    return true;
+                }
+                ++position;
+            }
+
+            SetError(XMLParseError::ErrorType::UnclosedTag, "Unclosed comment");
+            return false;
+        }
+
+        auto ParseCDATA() -> std::string {
+            if (position + 8 >= content.length() || content.substr(position,9) != "<![CDATA[" ) {
+                SetError(XMLParseError::ErrorType::InvalidCDATA, "Invalid CDATA section start");
+                return {};
+            }
+
+            position += 9;
+            std::string cDataContent = "";
+
+            while (position + 2 < content.length()) {
+                if (content.substr(position,3) == "]]>") {
+                    position += 3;
+                    return cDataContent;
+                }
+                cDataContent += content[position++];
+            }
+
+            SetError(XMLParseError::ErrorType::UnclosedTag, "Unclosed CDATA section");
+            return {};
+        }
+
+        auto ParseNodeContent(XMLNode &node) -> std::string {
+            std::string nodeContent = "";
+
+            while (position < content.length()) {
+                if (content[position] == '<') {
+
+                    if (position + 8 < content.length() && content.substr(position,9) == "<![CDATA[") {
+                        auto cdata = ParseCDATA();
+                        if (lastError) return {};
+                        nodeContent += cdata;
+                        continue;
+                    }
+
+                    if (position + 3 < content.length() && content.substr(position,4) == "<!--") {
+                        if (!SkipComment()) {
+                            return {};
+                        }
+
+                        continue;
+                    }
+
+                    if (position + 1 < content.length() && content[position + 1] == '/') {
+                        position += 2;
+                        auto closingTag = ReadUntil('>');
+                        if (closingTag != node.GetName()) {
+                            SetError(XMLParseError::ErrorType::MalformedXML, 
+                            "Mismatched closing tag: expected " + node.GetName());
+                            return {};
+                        }
+                        ++position;
+                        return nodeContent;
+                    }
+
+                    auto childNode = ParseNode();
+                    if (!childNode) {
+                        return {};
+                    }
+                    node.AddChild(std::move(childNode));
+                } else {
+                    nodeContent += content[position++];
+                }
+            }
+
+            SetError(XMLParseError::ErrorType::UnclosedTag, "No closing tag found for " + node.GetName());
+            return nodeContent;
+        }
+
+        auto ParseNode() -> std::unique_ptr<XMLNode> {
+            if (position >= content.length()) {
+                SetError(XMLParseError::ErrorType::UnexpectedEOF, "Unexpected end of file while parsing node");
+                return nullptr;
+            }
+
+            ++position;
+            std::string nodeName = ReadNodeName();
+
+            if (nodeName.empty()) {
+                SetError(XMLParseError::ErrorType::InvalidTag, "Invalid tag name");
+                return nullptr;
+            }
+
+            auto node = std::make_unique<XMLNode>(std::move(nodeName));
+
+            SkipWhitespace();
+
+            if (!ParseAttributes(*node)) {
+                SetError(XMLParseError::ErrorType::InvalidAttribute, "Error parsing attributes");
+                return nullptr;
+            }
+
+            if (!IsEndOfTag()) {
+                SetError(XMLParseError::ErrorType::MalformedXML, "Expected '>' at end of tag");
+                return nullptr;
+            }
+
+            ++position;
+
+            std::string nodeContent = ParseNodeContent(*node);
+            node -> SetContent(std::move(nodeContent));
+
             return node;
         }
 
-        if (!match('>')) {
-            throw std::runtime_error(std::format("Expected '>' at position {}", position));
+    public:
+        explicit XMLParser(std::string_view xmlContent) : content(xmlContent) {}
+
+        auto GetLastError() const -> const std::optional<XMLParseError>& {
+            return lastError;
         }
 
-        while (position < content.length()) {
-            skipWhiteSpace();
-            
-            if (match('<')) {
-                if (match('/')) {  
-                    std::string closingName = parseName();
-                    if (closingName != nodeName) {
-                        throw std::runtime_error(
-                            std::format("Mismatched closing tag. Expected {} but got {} at position {}", 
-                                      nodeName, closingName, position)
-                        );
-                    }
-                    if (!match('>')) {
-                        throw std::runtime_error(std::format("Expected '>' at position {}", position));
-                    }
-                    return node;
-                } else {  
-                    position--;  
-                    node->addChild(parseNode());
-                }
-            } else {
-                std::string text;
-                while (peek() != '<' && position < content.length()) {
-                    text += peek();
-                    advance();
-                }
-                if (!text.empty() && !std::all_of(text.begin(), text.end(), ::isspace)) {
-                    auto textNode = std::make_unique<XMLNode>("#text");
-                    textNode->setContent(std::move(text));
-                    node->addChild(std::move(textNode));
-                }
+        auto Parse() -> std::unique_ptr<XMLNode> {
+            SkipWhitespace();
+            if (position >= content.length() || content[position] != '<') {
+                return nullptr;
             }
+            return ParseNode();
         }
 
-        throw std::runtime_error(std::format("Unexpected end of XML at position {}", position));
-    }
+        auto ValidateXML() -> bool {
+            position = 0;
+            lastError = std::nullopt;
+            SkipWhitespace();
 
-    struct ParseError {
-        std::string message;
-        size_t position;
-    };
+            if(position + 4 < content.length() && content.substr(position,5) == "<?xml") {
+                while (position < content.length() && content[position] != '>') {
+                    ++position;
+                }
+                if (position >= content.length()) {
+                    SetError(XMLParseError::ErrorType::UnclosedTag, "Unclosed XML declaration");
+                    return false;
+                }
+                ++position;
+                SkipWhitespace();
+            }
 
-    template <typename ParsedResult>
-    using ParseResult = std::expected<ParsedResult,ParseError>;
+            auto root = Parse();
+            return root != nullptr && !lastError;
+        }
+
+        static auto IsXMLFile(std::string_view filename) -> bool {
+            auto positionOfExtension = filename.rfind('.');
+            if (positionOfExtension == std::string_view::npos) return false;
+
+            auto extension = filename.substr(positionOfExtension + 1);
+            return extension == "xml";
+        }
+};
+
+class XMLBuilder {
+    private:
+        std::unique_ptr<XMLNode> root;
+        XMLNode* current;
+        std::vector<XMLNode*> nodeStack; 
 
     public:
-
-    explicit XMLParser(std::string_view XMLContent) : content(XMLContent) {}
-
-    XMLParser(const XMLParser&) = delete;
-    XMLParser& operator=(const XMLParser&) = delete;
-    XMLParser(XMLParser&&) noexcept = default;
-    XMLParser& operator=(XMLParser&&) noexcept = default;
-
-     [[nodiscard]] std::unique_ptr<XMLNode> parse() {
-        try {
-            skipWhiteSpace();
-            if (position >= content.length()) {
-                throw std::runtime_error("Empty XML content");
-            }
-            return parseNode();
-        } catch (const std::exception& e) {
-            throw std::runtime_error(
-                std::format("XML parsing error at position {}: {}", position, e.what())
-            );
+        XMLBuilder(std::string rootName) 
+        : root(std::make_unique<XMLNode>(std::move(rootName))), current(root.get()) {
+            nodeStack.push_back(current);
         }
-    }
+
+        auto AddChild(std::string name) -> XMLBuilder& {
+            auto child = std::make_unique<XMLNode>(std::move(name));
+            auto childPointer = child.get();
+            current -> AddChild(std::move(child));
+            nodeStack.push_back(current);
+            current = childPointer;
+            return *this;
+        }
+
+        auto AddAttribute(std::string key, std::string value) -> XMLBuilder& {
+            current->AddAttribute(std::move(key), std::move(value));
+            return *this;
+        }
+
+        auto SetContent(std::string content) -> XMLBuilder& {
+            current->SetContent(std::move(content));
+            return *this;
+        }
+
+        auto Up() -> XMLBuilder& {
+            if (!nodeStack.empty()) {
+                current = nodeStack.back();
+                nodeStack.pop_back();
+            }
+            return *this;
+        }
+
+        auto ToRoot() -> XMLBuilder& {
+            while (!nodeStack.empty()) {
+                Up();
+            }
+            return *this;
+        }
+
+        auto GetCurrentNode() const -> const XMLNode* {
+            return current;
+        }
+
+        auto Build() -> std::unique_ptr<XMLNode> {
+            return std::move(root);
+        }
 };
