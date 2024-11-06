@@ -35,8 +35,8 @@ class XMLValidator {
                 struct Constraint {
                     std::optional<std::string> pattern;
                     std::optional<std::string> enumeration;
-                    std::optional<int> minLength;
-                    std::optional<int> maxLength;
+                    std::optional<size_t> minLength;
+                    std::optional<size_t> maxLength;
                     std::optional<std::string> minValue;
                     std::optional<std::string> maxValue;
                 };

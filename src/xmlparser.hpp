@@ -171,12 +171,20 @@ class XMLParser {
                 ++position;
 
                 node.AddAttribute(std::move(name),std::move(value));
+                SkipWhitespace();
             }
             return true;
         }
 
         auto IsValidTag(std::string_view tag) const -> bool {
             if(tag.empty()) return false;
+
+            auto colonPosition = tag.find(':');
+            if(colonPosition != std::string_view::npos) {
+                auto prefix = tag.substr(0, colonPosition);
+                auto name = tag.substr(colonPosition + 1);
+                return !prefix.empty() && !name.empty();
+            }
 
             if(!std::isalpha(tag[0]) && tag[0] != '_') return false;
 
@@ -296,6 +304,12 @@ class XMLParser {
                 return nullptr;
             }
 
+            bool isSelfClosing = false;
+            if (position < content.length() && content[position] == '/') {
+                isSelfClosing = true;
+                ++position;
+            }
+
             if (!IsEndOfTag()) {
                 SetError(XMLParseError::ErrorType::MalformedXML, "Expected '>' at end of tag");
                 return nullptr;
@@ -305,6 +319,11 @@ class XMLParser {
 
             std::string nodeContent = ParseNodeContent(*node);
             node -> SetContent(std::move(nodeContent));
+
+            if (!isSelfClosing) {
+                std::string nodeContent = ParseNodeContent(*node);
+                node->SetContent(std::move(nodeContent));
+            }
 
             return node;
         }
@@ -318,9 +337,29 @@ class XMLParser {
 
         auto Parse() -> std::unique_ptr<XMLNode> {
             SkipWhitespace();
+
+            if (position >= content.length()) {
+                return nullptr;
+            }
+
+            if (position + 5 <= content.length() && content.substr(position,5) == "<?xml") {
+                while (position+1 < content.length() && !(content[position] == '?' && content[position + 1] == '>')) {
+                    ++position;
+                }
+
+                if (position + 1 >= content.length()) {
+                    SetError(XMLParseError::ErrorType::UnclosedTag, "Unclosed XML declaration");
+                    return nullptr;
+                }
+
+                position += 2;
+                SkipWhitespace();
+            }
+
             if (position >= content.length() || content[position] != '<') {
                 return nullptr;
             }
+
             return ParseNode();
         }
 
