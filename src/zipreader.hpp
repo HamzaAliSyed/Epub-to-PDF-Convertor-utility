@@ -62,6 +62,70 @@ class ZipReader{
             return {};
         }
 
+        struct EPUBMetaData {
+            std::string title;
+            std::string creator;
+            std::string language;
+            std::string identifier;
+            std::string publisher;
+            std::string dateOfPublication;
+        };
+
+        [[nodiscard]] auto parseOPFFile(const std::string& opfPath) -> std::unique_ptr<XMLNode> {
+            auto opfIt = std::find_if(
+                fileHeaders.begin(), fileHeaders.end(),
+                [&opfPath](const LocalFileHeader& header) {
+                    return header.fileName == opfPath;
+                }
+            );
+
+            if (opfIt == fileHeaders.end()) {
+                std::cerr << "OPF file not found: " << opfPath << '\n';
+                return nullptr;
+            }
+
+            return extractAndParseXML(*opfIt);
+        }
+
+        [[nodiscard]] auto ExtractMetaData(const XMLNode& opfNode) -> EPUBMetaData {
+            EPUBMetaData metaData;
+
+            const XMLNode* metaDataNode = nullptr;
+            for (const auto& child : opfNode.GetChildren()) {
+                if (child->GetName() == "metadata" || child->GetName().find(":metadata") != std::string::npos 
+                || child->GetName() == "opf:metadata") {
+                    metaDataNode = child.get();
+                    std::cout << "Found metadata node: " << child->GetName() << "\n";
+                    break;
+                }
+            }
+
+            if (!metaDataNode) {
+                std::cerr << "No metadata section found in OPF\n";
+                return metaData;
+            }
+
+            auto getDCElement = [&](const std::string& elementName) -> std::string {
+                for (const auto& child : metaDataNode->GetChildren()) {
+                    if (child->GetName() == "dc" + elementName || child->GetName() == elementName ||
+                    child->GetName() == "opf:" + elementName || child->GetName() == "dc:" + elementName) {
+                        return child->GetContent();
+                    }
+                }
+
+                return {};
+            };
+
+            metaData.title = getDCElement("title");
+            metaData.creator = getDCElement("creator");
+            metaData.language = getDCElement("language");
+            metaData.identifier = getDCElement("identifier");
+            metaData.publisher = getDCElement("publisher");
+            metaData.dateOfPublication = getDCElement("date");
+
+            return metaData;
+        }
+
     public:
         explicit ZipReader(const std::filesystem::path &filePath) {
             epubFile.open(filePath, std::ios::binary);
@@ -297,6 +361,25 @@ class ZipReader{
             }
 
             std::cout << "Found OPF file: " << opfPath << '\n';
+
+            auto opfNode = parseOPFFile(opfPath);
+            if (!opfNode) {
+                std::cerr << "Failed to parse OPF file\n";
+                return false;
+            }
+
+            std::cout << "Parsed OPF structure:\n" << opfNode->ToString() << '\n';
+
+            auto metadata = ExtractMetaData(*opfNode);
+
+            std::cout << "\nEPUB Metadata:\n";
+            std::cout << "Title: " << metadata.title << '\n';
+            std::cout << "Creator: " << metadata.creator << '\n';
+            std::cout << "Language: " << metadata.language << '\n';
+            std::cout << "Identifier: " << metadata.identifier << '\n';
+            std::cout << "Publisher: " << metadata.publisher << '\n';
+            std::cout << "Date: " << metadata.dateOfPublication << '\n';
+
 
             return true;
         }
