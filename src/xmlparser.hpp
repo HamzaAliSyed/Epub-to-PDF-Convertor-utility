@@ -267,6 +267,13 @@ class XMLParser {
                         return nodeContent;
                     }
 
+                    std::string trimmed = nodeContent;
+                    trimmed.erase(0, trimmed.find_first_not_of(" \n\r\t"));
+                    if (!trimmed.empty()) {
+                        node.SetContent(std::move(trimmed));
+                    }
+                    nodeContent.clear();
+
                     auto childNode = ParseNode();
                     if (!childNode) {
                         return {};
@@ -317,11 +324,9 @@ class XMLParser {
 
             ++position;
 
-            std::string nodeContent = ParseNodeContent(*node);
-            node -> SetContent(std::move(nodeContent));
-
             if (!isSelfClosing) {
                 std::string nodeContent = ParseNodeContent(*node);
+                if (lastError) return nullptr;
                 node->SetContent(std::move(nodeContent));
             }
 

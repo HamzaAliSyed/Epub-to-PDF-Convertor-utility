@@ -90,8 +90,10 @@ class ZipReader{
         [[nodiscard]] auto ExtractMetaData(const XMLNode& opfNode) -> EPUBMetaData {
             EPUBMetaData metaData;
 
+            std::cout << "\nSearching for metadata node...\n";
             const XMLNode* metaDataNode = nullptr;
             for (const auto& child : opfNode.GetChildren()) {
+                std::cout << "Found node: '" << child->GetName() << "'\n";
                 if (child->GetName() == "metadata" || child->GetName().find(":metadata") != std::string::npos 
                 || child->GetName() == "opf:metadata") {
                     metaDataNode = child.get();
@@ -105,13 +107,38 @@ class ZipReader{
                 return metaData;
             }
 
+            std::cout << "\nMetadata children:\n";
+            for (const auto& child : metaDataNode->GetChildren()) {
+                std::cout << "Child name: '" << child->GetName() << "' Content: '" << child->GetContent() << "'\n";
+            }
+
             auto getDCElement = [&](const std::string& elementName) -> std::string {
+                std::cout << "\nLooking for element: " << elementName << "\n";
                 for (const auto& child : metaDataNode->GetChildren()) {
-                    if (child->GetName() == "dc" + elementName || child->GetName() == elementName ||
-                    child->GetName() == "opf:" + elementName || child->GetName() == "dc:" + elementName) {
+                    std::cout << "Checking node: '" << child->GetName() << "'\n";
+
+                    if (child->GetName() == "dc:" + elementName) {
+                        std::cout << "Found exact match dc:" << elementName << "\n";
+                        return child->GetContent();
+                    }
+
+                    if (child->GetName() == elementName) {
+                        std::cout << "Found exact match " << elementName << "\n";
+                        return child->GetContent();
+                    }
+
+                    if (child->GetName() == "dc" + elementName) {
+                        std::cout << "Found match dc" << elementName << "\n";
+                        return child->GetContent();
+                    }
+
+                    if (child->GetName() == "opf:" + elementName) {
+                        std::cout << "Found match opf:" << elementName << "\n";
                         return child->GetContent();
                     }
                 }
+
+                std::cout << "No match found for " << elementName << "\n";
 
                 return {};
             };
