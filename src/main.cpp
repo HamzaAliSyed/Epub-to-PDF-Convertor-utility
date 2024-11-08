@@ -1,7 +1,5 @@
 #include <iostream>
 #include "zipreader.hpp"
-#include "xmlparser.hpp"
-#include "xmlvalidator.hpp"
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
