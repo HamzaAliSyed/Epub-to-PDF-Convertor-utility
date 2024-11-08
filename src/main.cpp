@@ -21,16 +21,38 @@ int main(int argc, char* argv[]) {
          if (reader.readAllHeaders()) {
             reader.printAllFiles();
 
+            std::cout << "\nProcessing EPUB metadata...\n";
+
             if (!reader.processEPUBMetaData()) {
                 std::cerr << "Failed to process EPUB metadata\n";
                 return 1;
             }
 
-            std::cout << "\nExtracting uncompressed files...\n";
-            if (!reader.extractAllUncompressedFiles("output")) {
-                std::cerr << "Failed to extract some files\n";
-                return 1;
+            std::cout << "\nParsing table of contents...\n";
+            if (reader.ParseTOC()) {
+                std::cout << "Successfully parsed table of contents\n";
+            } else {
+                std::cout << "No table of contents found or failed to parse\n";
             }
+
+            std::cout << "\nProcessing content files...\n";
+
+            if (reader.ProcessContentFiles()) {
+                std::cout << "Successfully processed content files\n";
+            } else {
+                std::cout << "Some content files could not be processed\n";
+            }
+
+            std::cout << "\nProcessing stylesheets...\n";
+
+            if (reader.ProcessStylesheets()) {
+                std::cout << "Successfully processed stylesheets\n";
+            } else {
+                std::cout << "No stylesheets found or failed to process\n";
+            }
+
+
+            reader.PrintContentSummary();
         }
 
     } catch (std::exception& exception) {
