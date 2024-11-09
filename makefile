@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -Wall -std=c++23
+CXXFLAGS = -Wall -std=c++23 -fno-rtti
 SRC_DIR = src
 BUILD_DIR = build
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)

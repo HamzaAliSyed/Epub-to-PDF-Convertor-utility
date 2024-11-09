@@ -63,5 +63,25 @@ int main() {
     for (const auto& test : tests) {
         printString(test);
     }
+
+    auto document = std::make_shared<XMLNode> (XMLNodeType::Document);
+    auto root = std::make_shared<XMLNode>(XMLNodeType::Element);
+
+    root->SetName("root");
+
+    auto child = std::make_shared<XMLNode>(XMLNodeType::Element);
+    child->SetName("child");
+
+    auto text = std::make_shared<XMLNode>(XMLNodeType::Text);
+    text->SetName("Hello, UTF-8 World! 世界");
+
+    document->AddChild(root);
+    root->AddChild(child);
+    child->AddChild(text);
+
+    std::cout << "Root name: " << document->GetChildren()[0]->GetName() << "\n";
+    std::cout << "Child name: " << document->GetChildren()[0]->GetChildren()[0]->GetName() << "\n";
+    std::cout << "Text content: " << document->GetChildren()[0]->GetChildren()[0]->GetChildren()[0]->GetName() << "\n";
+    
     return 0;
 }
