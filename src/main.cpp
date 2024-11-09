@@ -1,7 +1,5 @@
 #include <iostream>
 #include <iomanip>
-#include <locale>
-#include <codecvt>
 #include "xmlparser.hpp"
 
 auto printCodePoint(uint32_t codePoint) -> void {
@@ -10,13 +8,23 @@ auto printCodePoint(uint32_t codePoint) -> void {
     if (codePoint >= 32 && codePoint <= 126) {
         std::cout << " (" << static_cast<char>(codePoint) << ")";
     } else {
-        std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
-        try {
-            std::string utf8_char = converter.to_bytes(static_cast<char32_t>(codePoint));
-            std::cout << " (" << utf8_char << ")";
-        } catch (...) {
-            
+        char utf8[5] = {0};  
+        if (codePoint <= 0x7F) {
+            utf8[0] = static_cast<char>(codePoint);
+        } else if (codePoint <= 0x7FF) {
+            utf8[0] = static_cast<char>(0xC0 | (codePoint >> 6));
+            utf8[1] = static_cast<char>(0x80 | (codePoint & 0x3F));
+        } else if (codePoint <= 0xFFFF) {
+            utf8[0] = static_cast<char>(0xE0 | (codePoint >> 12));
+            utf8[1] = static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F));
+            utf8[2] = static_cast<char>(0x80 | (codePoint & 0x3F));
+        } else if (codePoint <= 0x10FFFF) {
+            utf8[0] = static_cast<char>(0xF0 | (codePoint >> 18));
+            utf8[1] = static_cast<char>(0x80 | ((codePoint >> 12) & 0x3F));
+            utf8[2] = static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F));
+            utf8[3] = static_cast<char>(0x80 | (codePoint & 0x3F));
         }
+        std::cout << " (" << utf8 << ")";
     }
 
     std::cout << std::dec << std::endl;
@@ -82,6 +90,16 @@ int main() {
     std::cout << "Root name: " << document->GetChildren()[0]->GetName() << "\n";
     std::cout << "Child name: " << document->GetChildren()[0]->GetChildren()[0]->GetName() << "\n";
     std::cout << "Text content: " << document->GetChildren()[0]->GetChildren()[0]->GetChildren()[0]->GetName() << "\n";
-    
+
+    std::string simpleXML = "<root>Hello</root>";
+    XMLParser parser(simpleXML);
+
+    try {
+        auto doc = parser.Parse();
+        std::cout << "Root element name: " << doc->GetChildren()[0]->GetName() << std::endl;
+    } catch (const XMLParseError& exception) {
+        std::cout << "Parse error: " << exception.what() << std::endl;
+    }
+
     return 0;
 }

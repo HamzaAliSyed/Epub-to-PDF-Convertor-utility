@@ -31,12 +31,6 @@ auto XMLNode::GetParent() const -> XMLNodePointer {
     return parent_.lock();
 }
 
-XMLParseError::XMLParseError(const std::string& message) : std::runtime_error(message) {}
-XMLParseError::XMLParseError(const char* message) : std::runtime_error(message) {}
-
-const char* XMLParseError::what() const noexcept {
-    return std::runtime_error::what();
-}
 
 auto UTF8Utility::getUTF8SequenceLength(uint8_t firstByte) -> int {
     if ((firstByte & 0x80) == 0) return 1;
@@ -62,7 +56,6 @@ auto UTF8Utility::isValidCodepoint(uint32_t codePoint) -> bool {
     return (codePoint <= 0x10FFFF) && !(codePoint >= 0xD800 && codePoint <= 0xDFFF);
 }
 
-// UTF8Iterator implementations
 UTF8Iterator::UTF8Iterator(std::string_view::const_iterator current, std::string_view::const_iterator end) 
     : current_{current}, end_{end} {}
 
@@ -130,4 +123,66 @@ auto UTF8Iterator::operator!=(const UTF8Iterator& other) const -> bool {
 
 auto UTF8Iterator::underlying() const -> std::string_view::const_iterator {
     return current_;
+}
+
+XMLParser::XMLParser(std::string_view content) 
+    : content_(content), current_(content_.begin(), content_.end()), end_(content_.end(), content_.end()) 
+    {}
+
+auto XMLParser::Parse() -> XMLNodePointer {
+    auto document = std::make_shared<XMLNode>(XMLNodeType::Document);
+
+    SkipWhiteSpace();
+    if (current_ != end_) {
+        auto root = ParseElement();
+        if (root) {
+            document->AddChild(root);
+        }
+    }
+
+    return document;
+}
+
+auto XMLParser::ParseElement()->XMLNodePointer {
+    if (current_.CurrentCharacter() != '<') {
+        throw XMLParseError("Expected '<' at start of element");
+    }
+    ++current_;
+
+    auto element = std::make_shared<XMLNode>(XMLNodeType::Element);
+    element->SetName(ParseName());
+
+    while (current_ != end_ && current_.CurrentCharacter() != '>') {
+        ++current_;
+    }
+
+    if (current_ != end_) ++current_;
+
+    return element;
+}
+
+auto XMLParser::ParseName()->std::string {
+    std::string name;
+
+    while (current_ != end_) {
+        uint32_t character = current_.CurrentCharacter();
+        if (character == '>' || character == '/' || character == ' ' 
+            || character == '\t' || character == '\n' || character == '\r') {
+                break;
+        }
+
+        name += static_cast<char>(character);
+        ++current_;
+    }
+    return name;
+}
+
+auto XMLParser::SkipWhiteSpace()->void {
+    while (current_ != end_) {
+        uint32_t character = current_.CurrentCharacter();
+        if (character != ' ' && character != '\t' && character != '\n' && character != '\r') {
+            break;
+        }
+        ++current_;
+    }
 }
