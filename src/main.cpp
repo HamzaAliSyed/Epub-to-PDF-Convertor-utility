@@ -101,5 +101,24 @@ int main() {
         std::cout << "Parse error: " << exception.what() << std::endl;
     }
 
+    std::string xmlWithAttributes = R"(
+        <person id="123" name="John Doe" age="30"/>
+    )";
+
+    XMLParser attributeParser(xmlWithAttributes);
+
+    try {
+        auto doc = attributeParser.Parse();
+        auto root = doc->GetChildren()[0];
+        std::cout << "\nTesting attributes:\n";
+        std::cout << "Element name: " << root->GetName() << "\n";
+        std::cout << "Attributes:\n";
+        for (const auto& [key, value] : root->GetAttributes()) {
+            std::cout << " - " << key << ": " << value << "\n";
+        }
+    } catch (const XMLParseError& exception) {
+        std::cout << "Parse error: " << exception.what() << std::endl;
+    }
+
     return 0;
 }

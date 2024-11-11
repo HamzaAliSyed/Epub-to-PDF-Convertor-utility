@@ -150,13 +150,66 @@ auto XMLParser::ParseElement()->XMLNodePointer {
     ++current_;
 
     auto element = std::make_shared<XMLNode>(XMLNodeType::Element);
+    SkipWhiteSpace();
     element->SetName(ParseName());
 
-    while (current_ != end_ && current_.CurrentCharacter() != '>') {
+    while (current_ != end_ ) {
+        SkipWhiteSpace();
+
+        uint32_t currentChar = current_.CurrentCharacter();
+        if (currentChar == '>' || currentChar == '/') {
+            break;
+        }
+
+        std::string attributeName = ParseName();
+
+        if (attributeName.empty()) {
+            break;
+        }
+
+        SkipWhiteSpace();
+
         ++current_;
+
+        SkipWhiteSpace();
+
+        uint32_t quotationMark = static_cast<uint32_t>(current_.CurrentCharacter());
+        if (quotationMark != '"' && quotationMark != '\'') {
+            throw XMLParseError("Expected quote for attribute value");
+        }
+        ++current_;
+
+        std::string attributeValue;
+        while (current_ != end_ && current_.CurrentCharacter() != quotationMark) {
+            attributeValue += static_cast<char>(current_.CurrentCharacter());
+            ++current_;
+        }
+
+        if (current_ == end_) {
+            throw XMLParseError("Unterminated attribute value");
+        }
+
+        ++current_;
+
+        element->GetAttributes()[attributeName] = attributeValue;
     }
 
-    if (current_ != end_) ++current_;
+    if (current_ == end_) {
+        throw XMLParseError("Unexpected end of document");
+    }
+
+    if (current_.CurrentCharacter() == '/') {
+        ++current_;
+        if (current_.CurrentCharacter() != '>') {
+            throw XMLParseError("Expected '>' after '/'");
+        }
+        ++current_;
+        return element;
+    }
+
+    if (current_.CurrentCharacter() == '>') {
+        ++current_;
+    }
 
     return element;
 }
@@ -164,10 +217,12 @@ auto XMLParser::ParseElement()->XMLNodePointer {
 auto XMLParser::ParseName()->std::string {
     std::string name;
 
+    SkipWhiteSpace();
+
     while (current_ != end_) {
         uint32_t character = current_.CurrentCharacter();
         if (character == '>' || character == '/' || character == ' ' 
-            || character == '\t' || character == '\n' || character == '\r') {
+            || character == '\t' || character == '\n' || character == '\r' || character == '=') {
                 break;
         }
 
