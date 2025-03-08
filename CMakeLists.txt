@@ -1,0 +1,19 @@
+cmake_minimum_required(VERSION 4.0)
+
+project(EpubToPDFConvertor VERSION 1.0)
+
+set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/build)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_CXX_COMPILER clang++)
+
+set (SOURCES
+    ${SOURCE_DIR}/main.cpp
+)
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BUILD_DIR})
+
+add_executable(${PROJECT_NAME} ${SOURCES})

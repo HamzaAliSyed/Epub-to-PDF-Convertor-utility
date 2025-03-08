@@ -1,7 +1,7 @@
-# EPub to PDF Convertor
+# EPub to PDF Convertor (Work in Progress)
 
-## Design Steps
-
-- Design a ZIP Header reader then extractor
-- Design a XML Parser
-- Use Parser for EPUB file structure parsing
+## Steps to compile
+- Have CMake installed. I am using CMake 4.0
+- In the root directory run ```cmake . -B build```
+- Then execute ```cmake --build build```
+- You should get an .exe file in \build\build\Debug
